@@ -475,8 +475,6 @@ void StatefulOVInferRequest::PreProcessInferRequest() {
 
   if (is_kvcache_reorder_added) {
     ov::Shape dst_idx_shape = ovInfReq.get_tensor("dst_idx").get_shape();
-    const auto kv_num_heads = dst_idx_shape[1];
-    const auto kv_head_size = dst_idx_shape[3];
     if (kv_src_indices.size() > 0) {
       ov::Tensor src_idx_tensor = ov::Tensor(ov::element::i32, {kv_src_indices.size()});
       const auto src_idx_ptr = src_idx_tensor.data<int32_t>();
@@ -485,17 +483,15 @@ void StatefulOVInferRequest::PreProcessInferRequest() {
       }
       ovInfReq.set_tensor("src_idx", src_idx_tensor);
 
-      ov::Tensor dst_idx_tensor = ov::Tensor(ov::element::i32, {1, kv_num_heads, kv_dst_indices.size(), kv_head_size});
+      ov::Tensor dst_idx_tensor = ov::Tensor(ov::element::i32, {kv_dst_indices.size()});
       const auto dst_idx_ptr = dst_idx_tensor.data<int32_t>();
-      for (size_t i = 0; i < kv_num_heads; ++i) {
-        for (size_t j = 0; j < kv_dst_indices.size(); ++j) {
-          std::fill_n(dst_idx_ptr + (i * kv_dst_indices.size() + j) * kv_head_size, kv_head_size, kv_dst_indices[j]);
-        }
+      for (size_t i = 0; i < kv_dst_indices.size(); ++i) {
+        dst_idx_ptr[i] = static_cast<int32_t>(kv_dst_indices[i]);
       }
       ovInfReq.set_tensor("dst_idx", dst_idx_tensor);
     } else {
       FillTensor("src_idx", ov::element::i32, {0}, 0);
-      FillTensor("dst_idx", ov::element::i32, {1, kv_num_heads, 0, kv_head_size}, 0);
+      FillTensor("dst_idx", ov::element::i32, {1}, 0);
     }
   }
 
