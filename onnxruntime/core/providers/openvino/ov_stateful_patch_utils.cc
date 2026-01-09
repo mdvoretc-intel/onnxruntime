@@ -105,11 +105,21 @@ void FuseCacheReorder(std::shared_ptr<ov::Model> ov_model,
   ov_model->add_parameters({src_idx});
   not_kv_inputs.push_back(src_idx->get_friendly_name());
 
-  auto dst_idx = std::make_shared<ov::opset13::Parameter>(ov::element::i32, update_shape);
+  auto dst_idx = std::make_shared<ov::opset13::Parameter>(ov::element::i32, ov::PartialShape({update_shape[2]}));
   dst_idx->set_friendly_name("dst_idx");
   dst_idx->output(0).get_tensor().add_names({"dst_idx"});
   ov_model->add_parameters({dst_idx});
   not_kv_inputs.push_back(dst_idx->get_friendly_name());
+
+  auto update_size = std::make_shared<ov::opset13::Parameter>(ov::element::i32, ov::PartialShape({4}));
+  update_size->set_friendly_name("update_size");
+  update_size->output(0).get_tensor().add_names({"update_size"});
+  ov_model->add_parameters({update_size});
+  not_kv_inputs.push_back(update_size->get_friendly_name());
+
+  auto unsqueeze_const = ov::opset13::Constant::create(ov::element::i64, {3}, {0, 1, 3});
+  auto dst_idx_unsqueeze = std::make_shared<ov::opset3::Unsqueeze>(dst_idx, unsqueeze_const);
+  auto dst_idx_broadcast = std::make_shared<ov::opset3::Broadcast>(dst_idx_unsqueeze, update_size);
 
   // Go over all cache parameters and fuse _reorder_cache with indices provided by the new parameter beam_idx
   for (const auto& input_name : key_value_input_names) {
@@ -127,7 +137,9 @@ void FuseCacheReorder(std::shared_ptr<ov::Model> ov_model,
                                               ov::opset13::Constant::create(ov::element::i64, {}, {2}));
 
     auto update_op = std::make_shared<ov::opset12::ScatterElementsUpdate>(gather_op,
-        dst_idx, update_gather_op, ov::opset13::Constant::create(ov::element::i64, {}, {2}));
+                                                                          dst_idx_broadcast,
+                                                                          update_gather_op,
+                                                                          ov::opset13::Constant::create(ov::element::i64, {}, {2}));
 
     // Replace the source output for all consumers of the input tensor
     for (auto& consumer : consumers) {

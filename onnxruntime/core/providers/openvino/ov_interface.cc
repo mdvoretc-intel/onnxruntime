@@ -423,24 +423,23 @@ void StatefulOVInferRequest::PreProcessInferRequest() {
   // TODO(ankit): Address this issue and implement the fix at the appropriate layer.
   FillTensor("beam_idx", ov::element::i32, {1}, 0);
 
+  std::vector<int> update_size = {1, 32, (int)src_idx_val.size(), 96};
+  ov::Tensor update_size_tensor = ov::Tensor(ov::element::i32, {4}, update_size.data());
+  ovInfReq.set_tensor("update_size", update_size_tensor);
   if (src_idx_val.size() > 0) {
     ov::Tensor src_idx_tensor = ov::Tensor(ov::element::i32, {src_idx_val.size()});
     for (int i = 0; i < src_idx_val.size(); ++i) {
       src_idx_tensor.data<int32_t>()[i] = int32_t(src_idx_val[i]);
     }
     ovInfReq.set_tensor("src_idx", src_idx_tensor);
-    ov::Tensor dst_idx_tensor = ov::Tensor(ov::element::i32, {1, 32, dst_idx_val.size(), 96});
+    ov::Tensor dst_idx_tensor = ov::Tensor(ov::element::i32, {dst_idx_val.size()});
     for (int i = 0; i < dst_idx_val.size(); ++i) {
-      for (int j = 0; j < 32; ++j) {
-        for (int k = 0; k < 96; ++k) {
-          dst_idx_tensor.data<int32_t>()[(j * dst_idx_val.size() + i) * 96 + k] = int32_t(dst_idx_val[i]);
-        }
-      }
+      dst_idx_tensor.data<int32_t>()[i] = int32_t(dst_idx_val[i]);
     }
     ovInfReq.set_tensor("dst_idx", dst_idx_tensor);
   } else {
     FillTensor("src_idx", ov::element::i32, {0}, 0);
-    FillTensor("dst_idx", ov::element::i32, {1, 32, 0, 96}, 0);
+    FillTensor("dst_idx", ov::element::i32, {1}, 0);
   }
 
   // If 'prefill use full chat history' mode is enabled, we need to cache input_ids and position_ids.
